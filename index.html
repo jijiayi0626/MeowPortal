@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
   <title>XiaoYiY626</title>
   <style>
     :root {
@@ -138,10 +139,15 @@
       let currentUrl = '';
       let currentCredit = '拾光 · Pixiv';
       let loading = false;
+      // 图片加载失败时的重试次数（避免死链图卡住背景）
+      let bgRetries = 0;
+      const MAX_BG_RETRIES = 6;
 
       function setBackground(url, credit) {
         if (!url) return;
         const img = new Image();
+        // 不发送 Referer，绕过部分图床的防盗链
+        img.referrerPolicy = 'no-referrer';
         img.onload = function () {
           body.style.backgroundImage = `url("${url.replace(/"/g, '\\"')}")`;
           currentUrl = url;
@@ -151,14 +157,27 @@
             currentCredit = '拾光 · Pixiv';
           }
           creditEl.textContent = `背景：${currentCredit}`;
+          // 成功后重置重试计数
+          bgRetries = 0;
         };
         img.onerror = function () {
           console.warn('[bg] image load failed:', url);
+          // 该图死链/防盗链：换一张再试，最多重试 MAX_BG_RETRIES 次，仍失败则保留默认背景
+          if (bgRetries < MAX_BG_RETRIES) {
+            bgRetries++;
+            console.warn('[bg] retrying, attempt', bgRetries);
+            // 强制释放 loading，确保重试不会被吞
+            loading = false;
+            fetchRandom(true);
+          } else {
+            console.warn('[bg] retries exhausted, keep default background');
+          }
         };
         img.src = url + (url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
       }
 
-      async function fetchRandom() {
+      // isRetry=true 表示这是一次图片加载失败触发的重试，不要被 loading 闸门拦住
+      async function fetchRandom(isRetry) {
         if (loading) return;
         loading = true;
         try {
@@ -178,27 +197,30 @@
           setBackground(d.imgurl, credit);
         } catch (e) {
           console.warn('[bg] json fetch failed, fallback to direct:', e.message);
-          setBackground(DIRECT_URL + '?t=' + Date.now(), '拾光 · Pixiv');
+          // JSON 拉取失败时才回退直链；重试中不再重复回退，交给 onerror 重试机制
+          if (!isRetry) {
+            setBackground(DIRECT_URL + '?t=' + Date.now(), '拾光 · Pixiv');
+          }
         } finally {
           loading = false;
         }
       }
 
       // 首屏立刻拉一张
-      fetchRandom();
+      fetchRandom(false);
 
       // 点击背景时换一张
       body.addEventListener('click', function (e) {
         if (e.target.closest('.container') || e.target.closest('.mynet-bar')) return;
-        fetchRandom();
+        fetchRandom(false);
       });
 
       // 每 10 分钟自动换一张
-      setInterval(fetchRandom, 10 * 60 * 1000);
+      setInterval(fetchRandom, 10 * 60 * 1000, false);
     })();
   </script>
 
   <!-- 自有 IP + 测速浮窗（顶部+底部 共享单脚本，无 ID 冲突） -->
-  <script src="./assets/mynet.js" defer></script>
+  <script src="./assets/mynet.js?v=20260724b" defer></script>
 </body>
 </html>
