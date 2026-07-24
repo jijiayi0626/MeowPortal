@@ -28,10 +28,16 @@
   const PROBE_TIMEOUT_MS = 1500;
   const IP_FETCH_TIMEOUT_MS = 4000;
 
+  // IP 接口：只保留实测在浏览器/webview 里带 CORS 头、稳定可用的端点，并发竞速取最快返回的那个。
+  // 排除原因：
+  //   - ip-api.com：免费 HTTPS 端点 403 且无 CORS 头
+  //   - ipapi.co / freeipapi.com：部分 webview(如 VDS)会拦截，产生红色 CORS 报错
+  //   - ipwhois.app：部分网络返回 403
+  // 留下 ipwho.is 与 api.ip.sb，两个都稳定带 Access-Control-Allow-Origin。
+  // 各接口返回字段结构不同，统一在 normalizeIP 里归一化。
   const IP_ENDPOINTS = [
-    'https://ipapi.co/json/',
-    'https://ipinfo.hinswu.top/json',
-    'https://ip-api.com/json/?fields=status,message,query,country,regionName,city,as,isp'
+    'https://ipwho.is/',
+    'https://api.ip.sb/geoip'
   ];
 
   // 测速点：每个端点有 name / url / key
@@ -101,7 +107,7 @@
       const res = await fetchWithTimeout(url, IP_FETCH_TIMEOUT_MS);
       if (!res.ok) throw new Error('not ok');
       const j = await res.json();
-      const ip = j && (j.ip || j.query);
+      const ip = j && (j.ip || j.query || j.ipAddress);
       if (!ip) throw new Error('no ip');
       return j;
     });
@@ -110,22 +116,29 @@
 
   function normalizeIP(data) {
     if (!data) return null;
-    const ip = data.ip || data.query || '';
-    const country = data.country_name || data.country || '';
-    const city = data.city || '';
-    const region = data.region || data.regionName || '';
+    // 不同接口字段结构差异较大，这里统一抽取。
+    // ip.sb / ipwhois.app / ipwho.is 会把 ASN/ISP 放在 connection 对象里
+    const conn = data.connection || {};
+    const ip = data.ip || data.query || data.ipAddress || '';
+    if (!ip) return null;
+    const country = data.country_name || data.country || data.countryName || '';
+    const city = data.city || data.cityName || '';
+    const region = data.region || data.regionName || data.region_name || data.state || '';
     const finalCity = city || region || '';
     const loc = (country && finalCity && country !== finalCity)
       ? `${country} · ${finalCity}`
       : (country || finalCity);
-    let asn = data.asn || '';
+    let asn = data.asn || conn.asn || '';
+    // ip.sb / ipwho.is 的 asn 是纯数字，补成 ASxxxx 形式
+    if (typeof asn === 'number') asn = asn ? 'AS' + asn : '';
     if (!asn && typeof data.org === 'string' && /^AS\d+\b/i.test(data.org)) {
       asn = (data.org.match(/^AS\d+\b/i) || [''])[0];
     }
     if (!asn && typeof data.as === 'string') {
       asn = (data.as.match(/^AS\d+\b/i) || [''])[0];
     }
-    let org = data.org || data.organization || data.isp || data.as_desc || '';
+    let org = data.org || data.organization || data.isp || conn.org || conn.isp
+      || conn.organization || data.asn_organization || data.as_desc || '';
     if (!org && typeof data.as === 'string') {
       org = data.as.replace(/^AS\d+\s*/i, '');
     }
