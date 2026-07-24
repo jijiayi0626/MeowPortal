@@ -22,12 +22,21 @@
       font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
       color: var(--ink);
       background-color: #d8d4e6;
-      background-image: url('./assets/bg-original.png');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      background-repeat: no-repeat;
-      transition: background-image .6s ease-in-out;
+    }
+    /* 固定定位 img 充当全屏背景，referrerPolicy 由 HTML 属性保证，
+       避免 CSS background-image 在部分 webview 里不遵守 meta referrer 的问题 */
+    .bg-img {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: -1;
+      pointer-events: none;
+      /* 本地兜底：远程图加载前/失败时显示 */
+      background: url('./assets/bg-original.png') center / cover no-repeat #d8d4e6;
+      transition: opacity .6s ease-in-out;
     }
     .container {
       position: relative;
@@ -107,6 +116,7 @@
   </style>
 </head>
 <body>
+  <img id="bgImg" class="bg-img" referrerPolicy="no-referrer" alt="" />
   <div class="container">
     <img class="cat" id="inuAvatar" src="./assets/xiaoyiy626-qq.jpg" alt="XiaoYiY626" />
     <h1>XiaoYiY626</h1>
@@ -135,6 +145,7 @@
 
       const body = document.body;
       const creditEl = document.getElementById('bgCredit');
+      const bgImg = document.getElementById('bgImg');
 
       let currentUrl = '';
       let currentCredit = '拾光 · Pixiv';
@@ -145,11 +156,12 @@
 
       function setBackground(url, credit) {
         if (!url) return;
-        const img = new Image();
-        // 不发送 Referer，绕过部分图床的防盗链
-        img.referrerPolicy = 'no-referrer';
-        img.onload = function () {
-          body.style.backgroundImage = `url("${url.replace(/"/g, '\\"')}")`;
+        // 直接设置可见 img 的 src，只发一次请求；
+        // referrerPolicy="no-referrer" 由 HTML 属性保证，对所有 webview 都生效。
+        // 之前用 CSS background-image 会导致浏览器发第二次请求（URL 还不带缓存破坏参数），
+        // 那次请求不继承 JS Image 的 referrerPolicy，在部分 webview 里被防盗链拦截。
+        const fullUrl = url + (url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+        bgImg.onload = function () {
           currentUrl = url;
           if (typeof credit === 'string' && credit.trim()) {
             currentCredit = credit;
@@ -160,7 +172,7 @@
           // 成功后重置重试计数
           bgRetries = 0;
         };
-        img.onerror = function () {
+        bgImg.onerror = function () {
           console.warn('[bg] image load failed:', url);
           // 该图死链/防盗链：换一张再试，最多重试 MAX_BG_RETRIES 次，仍失败则保留默认背景
           if (bgRetries < MAX_BG_RETRIES) {
@@ -173,7 +185,7 @@
             console.warn('[bg] retries exhausted, keep default background');
           }
         };
-        img.src = url + (url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+        bgImg.src = fullUrl;
       }
 
       // isRetry=true 表示这是一次图片加载失败触发的重试，不要被 loading 闸门拦住
@@ -199,7 +211,7 @@
           console.warn('[bg] json fetch failed, fallback to direct:', e.message);
           // JSON 拉取失败时才回退直链；重试中不再重复回退，交给 onerror 重试机制
           if (!isRetry) {
-            setBackground(DIRECT_URL + '?t=' + Date.now(), '拾光 · Pixiv');
+            setBackground(DIRECT_URL, '拾光 · Pixiv');
           }
         } finally {
           loading = false;
