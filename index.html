@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XiaoYiY626</title>
+  <style>
+    :root {
+      --ink: #3a3a5e;
+      --muted: #8a8ab0;
+      --soft: #b6b6d0;
+      --accent: #1a73e8;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      color: var(--ink);
+      background-color: #d8d4e6;
+      background-image: url('./assets/bg-original.png');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+      transition: background-image .6s ease-in-out;
+    }
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 90%;
+      max-width: 600px;
+      padding: 40px 36px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 16px 64px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+    .cat {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      margin-bottom: 6px;
+      display: inline-block;
+      object-fit: cover;
+      border: 3px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 4px 16px rgba(120, 100, 180, 0.18);
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+    .host-card {
+      display: inline-block;
+      padding: 12px 28px;
+      background: linear-gradient(135deg, #f6d5f7, #c2e9fb);
+      border-radius: 20px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #5a5a8a;
+      word-break: break-all;
+      box-shadow: 0 4px 16px rgba(160, 140, 200, 0.12);
+    }
+    .info {
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+    .footer {
+      margin-top: 28px;
+      font-size: 12px;
+      color: var(--soft);
+    }
+    .bg-credit {
+      position: fixed;
+      right: 12px;
+      bottom: 10px;
+      font-size: 11px;
+      color: rgba(60, 60, 90, 0.55);
+      background: rgba(255, 255, 255, 0.45);
+      padding: 4px 10px;
+      border-radius: 999px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 2;
+      max-width: calc(100vw - 24px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img class="cat" id="inuAvatar" src="./assets/xiaoyiy626-qq.jpg" alt="XiaoYiY626" />
+    <h1>XiaoYiY626</h1>
+    <p class="subtitle">欢迎你 · XiaoYiY626 收藏的访问入口</p>
+    <div class="host-card" id="hostDisplay">%host%</div>
+    <div class="info">当前通过 XiaoYiY626 顺手收藏的域名访问</div>
+    <div class="footer">Powered by XiaoYiY626</div>
+  </div>
+
+  <div class="bg-credit" id="bgCredit"></div>
+
+  <!-- 同步当前访问的域名 -->
+  <script>
+    document.getElementById('hostDisplay').textContent = window.location.host || '%host%';
+  </script>
+
+  <!-- 随机壁纸：拾光 API pixiv 通道（动漫图），每次刷新或点击换一张 -->
+  <script>
+    (function () {
+      'use strict';
+      // 拾光 API 的 pixiv 通道：全是动漫插画/漫画
+      // JSON 端点：返回 data.imgurl / data.title / data.copyright
+      const JSON_URL = 'https://api.nguaduot.cn/pixiv/random?json=1';
+      // 直链：浏览器直接 302 跳转加载图片
+      const DIRECT_URL = 'https://api.nguaduot.cn/pixiv/random';
+
+      const body = document.body;
+      const creditEl = document.getElementById('bgCredit');
+
+      let currentUrl = '';
+      let currentCredit = '拾光 · Pixiv';
+      let loading = false;
+
+      function setBackground(url, credit) {
+        if (!url) return;
+        const img = new Image();
+        img.onload = function () {
+          body.style.backgroundImage = `url("${url.replace(/"/g, '\\"')}")`;
+          currentUrl = url;
+          if (typeof credit === 'string' && credit.trim()) {
+            currentCredit = credit;
+          } else {
+            currentCredit = '拾光 · Pixiv';
+          }
+          creditEl.textContent = `背景：${currentCredit}`;
+        };
+        img.onerror = function () {
+          console.warn('[bg] image load failed:', url);
+        };
+        img.src = url + (url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+      }
+
+      async function fetchRandom() {
+        if (loading) return;
+        loading = true;
+        try {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 6000);
+          const r = await fetch(JSON_URL, { signal: ctrl.signal, cache: 'no-store' });
+          clearTimeout(t);
+          if (!r.ok) throw new Error('not ok');
+          const j = await r.json();
+          if (!j || j.status !== 1) throw new Error('bad status');
+          const d = j.data || {};
+          if (!d.imgurl) throw new Error('no imgurl');
+          const title = d.title || '';
+          const author = d.copyright || d.copyrightrich || '';
+          const credit = (title && author) ? `${title} · @${author}` :
+                         (title || author || '拾光 · Pixiv');
+          setBackground(d.imgurl, credit);
+        } catch (e) {
+          console.warn('[bg] json fetch failed, fallback to direct:', e.message);
+          setBackground(DIRECT_URL + '?t=' + Date.now(), '拾光 · Pixiv');
+        } finally {
+          loading = false;
+        }
+      }
+
+      // 首屏立刻拉一张
+      fetchRandom();
+
+      // 点击背景时换一张
+      body.addEventListener('click', function (e) {
+        if (e.target.closest('.container') || e.target.closest('.mynet-bar')) return;
+        fetchRandom();
+      });
+
+      // 每 10 分钟自动换一张
+      setInterval(fetchRandom, 10 * 60 * 1000);
+    })();
+  </script>
+
+  <!-- 自有 IP + 测速浮窗（顶部+底部 共享单脚本，无 ID 冲突） -->
+  <script src="./assets/mynet.js" defer></script>
+</body>
+</html>
